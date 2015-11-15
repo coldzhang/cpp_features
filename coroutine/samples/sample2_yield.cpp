@@ -4,7 +4,10 @@
 #include "coroutine.h"
 #include <stdio.h>
 
-int main()
+// 也可以使用co_main宏定义main函数, 
+// 此时, main函数也是执行在协程中, 不要再执行调度器!
+// 链接时需要增加参数：-lcoroutine_main
+co_main(int argc, char **argv)
 {
     // 在协程中使用co_yield关键字, 可以主动让出调度器执行权限,
     // 让调度器有机会去执行其他协程,
@@ -19,11 +22,7 @@ int main()
     //   4
     //
     // 注意：1.在协程外使用co_yield不会有任何效果，也不会出错。
-    //       2.如果程序中还需要使用thread库，
-    //         头文件包含语句#include "coroutine.h"，要放到
-    //         标准库或boost库的thread.hpp的include之后，
-    //         以防由于macro的特性导致编译错误。
-    //       3.不要忘记co_yield语句后面的分号";", 如果忘记，也
+    //       2.不要忘记co_yield语句后面的分号";", 如果忘记，也
     //         没有太大关系，编译器一定会不太友好地提醒你。
     //
     go []{
@@ -38,7 +37,6 @@ int main()
         printf("4\n");
     };
 
-    co_sched.RunUntilNoTask();
     return 0;
 }
 

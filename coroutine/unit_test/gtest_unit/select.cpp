@@ -6,7 +6,6 @@
 #include <time.h>
 #include <chrono>
 #include <boost/any.hpp>
-#include <dlfcn.h>
 #include "coroutine.h"
 using namespace std;
 using namespace co;
@@ -216,7 +215,8 @@ TEST(Select, Sleep)
 
 TEST(Select, MultiThreads)
 {
-    for (int i = 0; i < 100; ++i)
+//    co_sched.GetOptions().debug = co::dbg_hook;
+    for (int i = 0; i < 50; ++i)
         go [] {
             fd_set rd_fds;
             auto r = CreateFds(&rd_fds, 2);

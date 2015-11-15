@@ -58,6 +58,57 @@ public:
         return impl_->TryPop(ignore);
     }
 
+    template <typename U, typename Duration>
+    bool BlockTryPush(U && t, Duration const& timeout) const
+    {
+        int interval = 1;
+        auto begin = std::chrono::high_resolution_clock::now();
+        while (!TryPush(std::forward<U>(t))) {
+            auto now = std::chrono::high_resolution_clock::now();
+            if (std::chrono::duration_cast<Duration>(now - begin) >= timeout)
+                return false;
+
+            interval = std::min(32, interval << 1);
+            g_Scheduler.SleepSwitch(interval);
+        }
+
+        return true;
+    }
+
+    template <typename U, typename Duration>
+    bool BlockTryPop(U & t, Duration const& timeout) const
+    {
+        int interval = 1;
+        auto begin = std::chrono::high_resolution_clock::now();
+        while (!TryPop(t)) {
+            auto now = std::chrono::high_resolution_clock::now();
+            if (std::chrono::duration_cast<Duration>(now - begin) >= timeout)
+                return false;
+
+            interval = std::min(32, interval << 1);
+            g_Scheduler.SleepSwitch(interval);
+        }
+
+        return true;
+    }
+
+    template <typename Duration>
+    bool BlockTryPop(nullptr_t ignore, Duration const& timeout) const
+    {
+        int interval = 1;
+        auto begin = std::chrono::high_resolution_clock::now();
+        while (!TryPop(ignore)) {
+            auto now = std::chrono::high_resolution_clock::now();
+            if (std::chrono::duration_cast<Duration>(now - begin) >= timeout)
+                return false;
+
+            interval = std::min(32, interval << 1);
+            g_Scheduler.SleepSwitch(interval);
+        }
+
+        return true;
+    }
+
     bool Unique() const
     {
         return impl_.unique();
@@ -141,7 +192,7 @@ private:
                 if (write_block_.TryBlockWait())
                     return false;
                 else
-                    g_Scheduler.Yield();
+                    g_Scheduler.CoYield();
 
             {
                 std::unique_lock<CoMutex> lock(queue_lock_);
@@ -159,7 +210,7 @@ private:
                 if (write_block_.TryBlockWait())
                     return false;
                 else
-                    g_Scheduler.Yield();
+                    g_Scheduler.CoYield();
 
             {
                 std::unique_lock<CoMutex> lock(queue_lock_);
@@ -208,6 +259,40 @@ public:
         return impl_->TryPop(ignore);
     }
 
+    template <typename Duration>
+    bool BlockTryPush(nullptr_t ignore, Duration const& timeout) const
+    {
+        int interval = 1;
+        auto begin = std::chrono::high_resolution_clock::now();
+        while (!TryPush(ignore)) {
+            auto now = std::chrono::high_resolution_clock::now();
+            if (std::chrono::duration_cast<Duration>(now - begin) >= timeout)
+                return false;
+
+            interval = std::min(32, interval << 1);
+            g_Scheduler.SleepSwitch(interval);
+        }
+
+        return true;
+    }
+
+    template <typename Duration>
+    bool BlockTryPop(nullptr_t ignore, Duration const& timeout) const
+    {
+        int interval = 1;
+        auto begin = std::chrono::high_resolution_clock::now();
+        while (!TryPop(ignore)) {
+            auto now = std::chrono::high_resolution_clock::now();
+            if (std::chrono::duration_cast<Duration>(now - begin) >= timeout)
+                return false;
+
+            interval = std::min(32, interval << 1);
+            g_Scheduler.SleepSwitch(interval);
+        }
+
+        return true;
+    }
+
     bool Unique() const
     {
         return impl_.unique();
@@ -218,7 +303,6 @@ private:
     {
         BlockObject write_block_;
         BlockObject read_block_;
-        CoMutex queue_lock_;
 
     public:
         explicit ChannelImpl(std::size_t capacity)
@@ -257,7 +341,7 @@ private:
                 if (write_block_.TryBlockWait())
                     return false;
                 else
-                    g_Scheduler.Yield();
+                    g_Scheduler.CoYield();
 
             return true;
         }

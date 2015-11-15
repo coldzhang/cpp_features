@@ -51,11 +51,10 @@ TEST(Channel, capacity0)
     }
 
     // multi thread
-    
     int k = 0;
     std::atomic<int> total{0};
     int total_check = 0;
-    for (k = 0; k < 10000; ++k) {
+    for (k = 0; k < 100; ++k) {
         total_check += k;
         go [=]{ ch << k; };
         go [&]{ short v; ch >> v; total += v; };
@@ -271,7 +270,7 @@ TEST(Channel, capacity0Try)
         auto e = system_clock::now();
         auto d = duration_cast<milliseconds>(e - s).count();
         EXPECT_LT(d, 250);
-        EXPECT_GT(d, 199);
+        EXPECT_GT(d, 190);
         EXPECT_EQ(i, 7);
         EXPECT_EQ(wake, 1);
         EXPECT_EQ(pop_done, 2);
@@ -333,5 +332,85 @@ TEST(Channel, capacity1Try)
         EXPECT_EQ(after_pop, 4);
         ch >> i;
         EXPECT_EQ(i, 3);
+    }
+}
+
+TEST(Channel, capacity0BlockTry)
+{
+    {
+        co_chan<int> ch;
+
+        // block try
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.BlockTryPush(1, milliseconds(32));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 31);
+            EXPECT_LT(c, 64);
+        };
+        g_Scheduler.RunUntilNoTask();
+
+        // block try
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.BlockTryPush(1, milliseconds(100));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 99);
+            EXPECT_LT(c, 133);
+        };
+        g_Scheduler.RunUntilNoTask();
+
+        go [=] {
+            auto s = system_clock::now();
+            int i;
+            bool ok = ch.BlockTryPop(i, milliseconds(100));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 99);
+            EXPECT_LT(c, 133);
+        };
+        g_Scheduler.RunUntilNoTask();
+
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.BlockTryPop(nullptr, milliseconds(100));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 99);
+            EXPECT_LT(c, 133);
+        };
+        g_Scheduler.RunUntilNoTask();
+    }
+
+    {
+        co_chan<void> ch;
+
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.BlockTryPush(nullptr, milliseconds(100));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 99);
+            EXPECT_LT(c, 133);
+        };
+        g_Scheduler.RunUntilNoTask();
+
+        go [=] {
+            auto s = system_clock::now();
+            bool ok = ch.BlockTryPop(nullptr, milliseconds(100));
+            auto e = system_clock::now();
+            auto c = duration_cast<milliseconds>(e - s).count();
+            EXPECT_FALSE(ok);
+            EXPECT_GT(c, 99);
+            EXPECT_LT(c, 133);
+        };
+        g_Scheduler.RunUntilNoTask();
     }
 }

@@ -30,7 +30,7 @@ public:
 
     uint32_t Run(ThreadLocalInfo &info, uint32_t &done_count);
 
-    void Yield(ThreadLocalInfo &info);
+    void CoYield(ThreadLocalInfo &info);
 
     uint32_t GetTaskCount();
 

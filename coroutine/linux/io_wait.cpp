@@ -1,5 +1,5 @@
 #include "io_wait.h"
-#include <sys/poll.h>
+#include <sys/epoll.h>
 #include "scheduler.h"
 
 namespace co
@@ -42,7 +42,7 @@ void IoWait::CoSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
 
     DebugPrint(dbg_ioblock, "task(%s) CoSwitch id=%d, nfds=%d, timeout=%d",
             tk->DebugInfo(), id, (int)fdsts.size(), timeout_ms);
-    g_Scheduler.Yield();
+    g_Scheduler.CoYield();
 }
 
 void IoWait::SchedulerSwitch(Task* tk)
@@ -56,7 +56,7 @@ void IoWait::SchedulerSwitch(Task* tk)
     // 并且重新进入一次syscall, 导致id变化.
     uint32_t id = tk->io_block_id_;
 
-    RefGuard ref_guard(tk);
+    RefGuard<> ref_guard(tk);
     wait_tasks_.push(tk);
     std::vector<std::pair<int, uint32_t>> rollback_list;
     for (auto &fdst : tk->wait_fds_)
@@ -188,6 +188,7 @@ retry:
             // 将tk暂存, 最后再执行Cancel, 是为了poll和select可以得到正确的计数。
             // 以防Task被加入runnable列表后，被其他线程执行
             epollwait_tasks_.insert(EpollWaitSt{tk, ep->io_block_id});
+            DebugPrint(dbg_ioblock, "task(%s) epoll trigger io_block_id(%u)", tk->DebugInfo(), ep->io_block_id);
         }
     }
 

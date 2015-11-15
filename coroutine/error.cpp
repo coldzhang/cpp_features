@@ -4,7 +4,7 @@
 namespace co
 {
 
-const char* co_error_category::name() const noexcept
+const char* co_error_category::name() const throw()
 {
     return "coroutine_error";
 }
@@ -29,6 +29,12 @@ std::string co_error_category::message(int v) const
 
         case (int)eCoErrorCode::ec_swapcontext_failed:
             return "swapcontext failed";
+
+		case (int)eCoErrorCode::ec_makecontext_failed:
+			return "makecontext failed";
+
+        case (int)eCoErrorCode::ec_iocpinit_failed:
+            return "iocp init failed";
     }
 
     return "";

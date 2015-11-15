@@ -5,6 +5,7 @@
 #include <system_error>
 #include <unistd.h>
 #include "thread_pool.h"
+#include "platform_adapter.h"
 
 namespace co
 {
@@ -29,8 +30,11 @@ Scheduler::~Scheduler()
 
 ThreadLocalInfo& Scheduler::GetLocalInfo()
 {
-    static thread_local ThreadLocalInfo info;
-    return info;
+    static co_thread_local ThreadLocalInfo *info = NULL;
+    if (!info)
+        info = new ThreadLocalInfo();
+
+    return *info;
 }
 
 CoroutineOptions& Scheduler::GetOptions()
@@ -57,11 +61,11 @@ bool Scheduler::IsEmpty()
     return task_count_ == 0;
 }
 
-void Scheduler::Yield()
+void Scheduler::CoYield()
 {
     Task* tk = GetLocalInfo().current_task;
     if (!tk) return ;
-    tk->proc_->Yield(GetLocalInfo());
+    tk->proc_->CoYield(GetLocalInfo());
 }
 
 uint32_t Scheduler::Run()
@@ -99,7 +103,7 @@ uint32_t Scheduler::Run()
 
     if (!run_task_count && ep_count <= 0 && !tm_count && !sl_count) {
         DebugPrint(dbg_scheduler_sleep, "sleep %d ms", (int)sleep_ms_);
-        sleep_ms_ = std::min(++sleep_ms_, GetOptions().max_sleep_ms);
+        sleep_ms_ = (std::min)(++sleep_ms_, GetOptions().max_sleep_ms);
         usleep(sleep_ms_ * 1000);
     } else {
         sleep_ms_ = 1;
@@ -248,7 +252,7 @@ void Scheduler::IOBlockSwitch(std::vector<FdStruct> && fdsts, int timeout_ms)
 void Scheduler::SleepSwitch(int timeout_ms)
 {
     if (timeout_ms <= 0)
-        Yield();
+        CoYield();
     else
         sleep_wait_.CoSwitch(timeout_ms);
 }
@@ -307,7 +311,7 @@ bool Scheduler::BlockWait(int64_t type, uint64_t wait_id)
     DebugPrint(dbg_wait, "task(%s) %s. wait_type=%lld, wait_id=%llu",
             tk->DebugInfo(), type < 0 ? "sys_block" : "user_block",
             (long long int)tk->user_wait_type_, (long long unsigned)tk->user_wait_id_);
-    Yield();
+    CoYield();
     return true;
 }
 

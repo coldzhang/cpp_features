@@ -1,6 +1,8 @@
 #include "task.h"
 #include <iostream>
 #include <string.h>
+#include <string>
+#include <algorithm>
 #include "scheduler.h"
 
 namespace co
@@ -14,43 +16,47 @@ LFLock Task::s_delete_list_lock;
 
 static void C_func(Task* self)
 {
-    try {
+    if (g_Scheduler.GetOptions().exception_handle == eCoExHandle::immedaitely_throw) {
         (self->fn_)();
-    } catch (std::exception& e) {
-        switch (g_Scheduler.GetOptions().exception_handle) {
-            case eCoExHandle::immedaitely_throw:
-                throw ;
-                break;
+    } else {
+        try {
+            (self->fn_)();
+        } catch (std::exception& e) {
+            switch (g_Scheduler.GetOptions().exception_handle) {
+                case eCoExHandle::immedaitely_throw:
+                    throw ;
+                    break;
 
-            case eCoExHandle::delay_rethrow:
-                self->eptr_ = std::current_exception();
-                break;
+                case eCoExHandle::delay_rethrow:
+                    self->eptr_ = std::current_exception();
+                    break;
 
-            default:
-            case eCoExHandle::debugger_only:
-                DebugPrint(dbg_exception, "task(%s) has uncaught exception:%s",
-                        self->DebugInfo(), e.what());
-                break;
-        }
-    } catch (...) {
-        switch (g_Scheduler.GetOptions().exception_handle) {
-            case eCoExHandle::immedaitely_throw:
-                throw ;
-                break;
+                default:
+                case eCoExHandle::debugger_only:
+                    DebugPrint(dbg_exception, "task(%s) has uncaught exception:%s",
+                            self->DebugInfo(), e.what());
+                    break;
+            }
+        } catch (...) {
+            switch (g_Scheduler.GetOptions().exception_handle) {
+                case eCoExHandle::immedaitely_throw:
+                    throw ;
+                    break;
 
-            case eCoExHandle::delay_rethrow:
-                self->eptr_ = std::current_exception();
-                break;
+                case eCoExHandle::delay_rethrow:
+                    self->eptr_ = std::current_exception();
+                    break;
 
-            default:
-            case eCoExHandle::debugger_only:
-                DebugPrint(dbg_exception, "task(%s) has uncaught exception.", self->DebugInfo());
-                break;
+                default:
+                case eCoExHandle::debugger_only:
+                    DebugPrint(dbg_exception, "task(%s) has uncaught exception.", self->DebugInfo());
+                    break;
+            }
         }
     }
 
     self->state_ = TaskState::done;
-    Scheduler::getInstance().Yield();
+    Scheduler::getInstance().CoYield();
 }
 
 Task::Task(TaskF const& fn)
@@ -84,12 +90,14 @@ void Task::AddIntoProcesser(Processer *proc, char* shared_stack, uint32_t shared
     ctx_.uc_link = NULL;
     makecontext(&ctx_, (void(*)(void))&C_func, 1, this);
 
+#ifndef CO_USE_WINDOWS_FIBER
     // save coroutine stack first 16 bytes.
     assert(!stack_);
     stack_size_ = 16;
     stack_capacity_ = std::max<uint32_t>(16, g_Scheduler.GetOptions().init_stack_size);
     stack_ = (char*)malloc(stack_capacity_);
     memcpy(stack_, shared_stack + shared_stack_cap - stack_size_, stack_size_);
+#endif
 
     state_ = TaskState::runnable;
 }
@@ -143,19 +151,5 @@ void Task::DecrementRef()
         s_delete_list.push_back(this);
     }
 }
-
-RefGuard::RefGuard(Task* tk) : tk_(tk)
-{
-    tk_->IncrementRef();
-}
-RefGuard::RefGuard(Task& tk) : tk_(&tk)
-{
-    tk_->IncrementRef();
-}
-RefGuard::~RefGuard()
-{
-    tk_->DecrementRef();
-}
-
 
 } //namespace co

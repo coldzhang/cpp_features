@@ -13,13 +13,15 @@ enum class eCoErrorCode : int
     ec_block_object_waiting,
     ec_yield_failed,
     ec_swapcontext_failed,
+	ec_makecontext_failed,
+    ec_iocpinit_failed,
 };
 
 class co_error_category
     : public std::error_category
 {
 public:
-    virtual const char* name() const noexcept;
+    virtual const char* name() const throw();
 
     virtual std::string message(int) const;
 };
